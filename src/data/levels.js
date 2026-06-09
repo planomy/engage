@@ -1,3 +1,5 @@
+import { asset } from '../utils/assets.js'
+
 export const LEVELS = [
   {
     id: 'disrupting',
@@ -5,7 +7,7 @@ export const LEVELS = [
     zone: 'disengagement',
     activity: 'active',
     accent: '#f87171',
-    image: '/images/disrupting.png',
+    image: asset('images/disrupting.png'),
     emoji: '😠',
     tagline: 'Making it hard for everyone to learn',
     behaviors: [
@@ -34,7 +36,7 @@ export const LEVELS = [
     zone: 'disengagement',
     activity: 'passive',
     accent: '#fb923c',
-    image: '/images/avoiding.png',
+    image: asset('images/avoiding.png'),
     emoji: '🙄',
     tagline: 'Finding ways to skip the work',
     behaviors: [
@@ -65,7 +67,7 @@ export const LEVELS = [
     zone: 'disengagement',
     activity: 'passive',
     accent: '#facc15',
-    image: '/images/withdrawing.png',
+    image: asset('images/withdrawing.png'),
     emoji: '😔',
     tagline: 'Here, but not really in it',
     behaviors: [
@@ -95,7 +97,7 @@ export const LEVELS = [
     zone: 'engagement',
     activity: 'passive',
     accent: '#4ade80',
-    image: '/images/participating.png',
+    image: asset('images/participating.png'),
     emoji: '🙂',
     tagline: 'Doing what you need to do',
     behaviors: [
@@ -125,7 +127,7 @@ export const LEVELS = [
     zone: 'engagement',
     activity: 'active',
     accent: '#60a5fa',
-    image: '/images/investing.png',
+    image: asset('images/investing.png'),
     emoji: '😊',
     tagline: 'Putting in real effort',
     behaviors: [
@@ -156,7 +158,7 @@ export const LEVELS = [
     zone: 'engagement',
     activity: 'active',
     accent: '#f472b6',
-    image: '/images/driving.png',
+    image: asset('images/driving.png'),
     emoji: '🤩',
     tagline: 'Leading your own learning',
     behaviors: [

@@ -13,6 +13,7 @@ import {
   loadHistory,
 } from './utils/engagement'
 import { pickCelebration, CELEBRATION_MS } from './utils/celebrations'
+import { asset } from './utils/assets'
 import './App.css'
 
 const VIEWS = {
@@ -24,10 +25,10 @@ const VIEWS = {
 }
 
 const NAV = [
-  { id: VIEWS.continuum, label: 'Continuum', icon: '/images/nav-continuum.png' },
-  { id: VIEWS.tally, label: 'Class Tally', icon: '/images/nav-tally.png' },
-  { id: VIEWS.progress, label: 'Progress', icon: '/images/nav-progress.png' },
-  { id: VIEWS.tips, label: 'Level Up Tips', icon: '/images/nav-tips.png' },
+  { id: VIEWS.continuum, label: 'Continuum', icon: asset('images/nav-continuum.png') },
+  { id: VIEWS.tally, label: 'Class Tally', icon: asset('images/nav-tally.png') },
+  { id: VIEWS.progress, label: 'Progress', icon: asset('images/nav-progress.png') },
+  { id: VIEWS.tips, label: 'Level Up Tips', icon: asset('images/nav-tips.png') },
 ]
 
 export default function App() {
@@ -103,7 +104,7 @@ export default function App() {
       <aside className={`sidebar ${view === VIEWS.continuum ? 'sidebar--compact' : ''}`}>
         <div className="sidebar__brand">
           <img
-            src="/images/engage-title.png"
+            src={asset('images/engage-title.png')}
             alt="Engage"
             className="sidebar__title-img"
           />
