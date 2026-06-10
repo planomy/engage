@@ -12,7 +12,6 @@ import {
   archiveTerm,
   calcEngagementScore,
   clearLiveSession,
-  formatShortDate,
   getArchivedTermLabels,
   hasUnsavedTally,
   loadArchives,
@@ -167,8 +166,6 @@ export default function App() {
   const totalSavedLessons =
     history.length +
     archivedTerms.reduce((sum, term) => sum + term.records.length, 0)
-  const carryingOver = sessionDate !== today && totalStudents > 0
-
   return (
     <div className="app">
       <aside className={`sidebar ${view === VIEWS.continuum ? 'sidebar--compact' : ''}`}>
@@ -196,13 +193,6 @@ export default function App() {
 
         {(view === VIEWS.continuum || totalStudents > 0) && (
           <div className="sidebar__session">
-            {view === VIEWS.continuum && (
-              <p className="sidebar__hint">
-                {carryingOver
-                  ? `Unsaved tally from ${formatShortDate(sessionDate)} — tap each student`
-                  : 'Ask each student — tap their level'}
-              </p>
-            )}
             <div className="sidebar__stats">
               <p className="sidebar__stats-label">Today&apos;s tally</p>
               <p className="sidebar__stats-value">{totalStudents}</p>
@@ -276,15 +266,12 @@ export default function App() {
                 How is everyone<br />
                 <span className="welcome__highlight">tracking today?</span>
               </h2>
-              <p className="welcome__sub">
-                Ask each student, then tap their level to build today&apos;s class tally.
-              </p>
               <button
                 type="button"
                 className="btn btn--primary btn--large welcome__cta"
                 onClick={() => setView(VIEWS.continuum)}
               >
-                Start tally →
+                Let&apos;s grow some minds
               </button>
             </div>
           </section>
