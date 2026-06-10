@@ -1645,7 +1645,7 @@
 .progress-chart__latest-value {
   font-size: 2rem;
   font-weight: 800;
-  color: var(--purple-light);
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .progress-chart__delta {
@@ -1698,29 +1698,29 @@
 }
 
 .progress-chart__line {
-  stroke: var(--purple-light);
-  stroke-width: 3;
+  stroke: rgba(255, 255, 255, 0.36);
+  stroke-width: 2;
   stroke-linecap: round;
   stroke-linejoin: round;
-  filter: drop-shadow(0 0 6px var(--purple-glow));
 }
 
 .progress-chart__dot-glow {
-  fill: var(--purple);
-  opacity: 0.4;
+  fill: rgba(255, 255, 255, 0.12);
+  opacity: 1;
 }
 
 .progress-chart__dot {
-  fill: var(--purple-light);
-  stroke: var(--white);
-  stroke-width: 2;
+  fill: rgba(255, 255, 255, 0.82);
+  stroke: rgba(255, 255, 255, 0.28);
+  stroke-width: 1.5;
 }
 
 .progress-chart__score-label {
-  fill: var(--purple-light);
+  fill: rgba(255, 255, 255, 0.88);
   font-size: 10px;
   font-weight: 800;
   font-family: Nunito, sans-serif;
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.55));
 }
 
 .progress-chart__legend {
@@ -1747,8 +1747,8 @@
 
 .progress-chart__legend-line {
   width: 20px;
-  height: 3px;
-  background: var(--purple-light);
+  height: 2px;
+  background: rgba(255, 255, 255, 0.38);
   border-radius: 999px;
 }
 
@@ -1790,7 +1790,7 @@
 
 .progress-chart__history-score {
   font-weight: 800;
-  color: var(--purple-light);
+  color: rgba(255, 255, 255, 0.72);
   min-width: 40px;
   text-align: right;
 }
