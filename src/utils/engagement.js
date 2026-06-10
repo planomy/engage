@@ -1,6 +1,10 @@
 import { LEVELS } from '../data/levels'
 
 const STORAGE_KEY = 'engage-lesson-history'
+const ARCHIVES_KEY = 'engage-term-archives'
+const SESSION_KEY = 'engage-live-session'
+
+export const TERM_OPTIONS = ['Term 1', 'Term 2', 'Term 3', 'Term 4']
 
 const LEVEL_SCORES = Object.fromEntries(
   LEVELS.map((level, index) => [level.id, index])
@@ -26,6 +30,10 @@ export function getTotalStudents(tallies) {
   return Object.values(tallies).reduce((sum, n) => sum + (n || 0), 0)
 }
 
+export function hasUnsavedTally(tallies) {
+  return getTotalStudents(tallies) > 0
+}
+
 export function emptyTallies() {
   return Object.fromEntries(LEVELS.map((l) => [l.id, 0]))
 }
@@ -43,6 +51,49 @@ export function loadHistory() {
 
 export function saveHistory(records) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+}
+
+export function loadArchives() {
+  try {
+    const raw = localStorage.getItem(ARCHIVES_KEY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+export function saveArchives(archives) {
+  localStorage.setItem(ARCHIVES_KEY, JSON.stringify(archives))
+}
+
+export function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY)
+    if (!raw) {
+      return { date: todayISO(), tally: {}, tallyHistory: [] }
+    }
+    const parsed = JSON.parse(raw)
+    return {
+      date: parsed.date || todayISO(),
+      tally: parsed.tally || {},
+      tallyHistory: Array.isArray(parsed.tallyHistory) ? parsed.tallyHistory : [],
+    }
+  } catch {
+    return { date: todayISO(), tally: {}, tallyHistory: [] }
+  }
+}
+
+export function saveSession({ date, tally, tallyHistory }) {
+  localStorage.setItem(
+    SESSION_KEY,
+    JSON.stringify({ date, tally, tallyHistory })
+  )
+}
+
+export function clearLiveSession() {
+  saveSession({ date: todayISO(), tally: {}, tallyHistory: [] })
 }
 
 export function addLessonRecord({ label, date, tallies }) {
@@ -81,6 +132,56 @@ export function deleteLessonRecord(id) {
   const records = loadHistory().filter((r) => r.id !== id)
   saveHistory(records)
   return records
+}
+
+export function archiveTerm(termLabel) {
+  const records = loadHistory()
+  if (records.length === 0) return loadArchives()
+
+  const archives = loadArchives()
+  const existing = archives[termLabel] || []
+  archives[termLabel] = [...existing, ...records].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.savedAt.localeCompare(b.savedAt)
+  )
+  saveArchives(archives)
+  saveHistory([])
+  return archives
+}
+
+export function getArchivedTermLabels() {
+  return Object.keys(loadArchives()).filter(
+    (term) => (loadArchives()[term] || []).length > 0
+  )
+}
+
+export function getArchivedLessons(termLabel) {
+  return loadArchives()[termLabel] || []
+}
+
+export function exportAllData() {
+  return {
+    exportedAt: new Date().toISOString(),
+    activeLessons: loadHistory(),
+    archivedTerms: loadArchives(),
+    liveSession: loadSession(),
+  }
+}
+
+export function downloadExport() {
+  const data = exportAllData()
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `engage-export-${todayISO()}.json`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+export function resetAllData() {
+  localStorage.removeItem(STORAGE_KEY)
+  localStorage.removeItem(ARCHIVES_KEY)
+  localStorage.removeItem(SESSION_KEY)
 }
 
 export function getTodayRecord() {

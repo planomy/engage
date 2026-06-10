@@ -1,18 +1,69 @@
+import { useState } from 'react'
 import { LEVELS } from '../data/levels'
-import { formatShortDate, getTotalStudents } from '../utils/engagement'
+import {
+  TERM_OPTIONS,
+  formatShortDate,
+  getTotalStudents,
+  downloadExport,
+} from '../utils/engagement'
 
 const CHART = { w: 720, h: 280, pad: { t: 24, r: 24, b: 48, l: 44 } }
 
-export default function ProgressChart({ records }) {
-  if (records.length === 0) {
+export default function ProgressChart({
+  records,
+  archivedTerms = [],
+  onArchiveTerm,
+  onResetAll,
+}) {
+  const [viewTerm, setViewTerm] = useState('current')
+  const [archiveTarget, setArchiveTarget] = useState(TERM_OPTIONS[0])
+  const [confirmArchive, setConfirmArchive] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+
+  const isArchiveView = viewTerm !== 'current'
+  const chartRecords = isArchiveView
+    ? (archivedTerms.find((t) => t.label === viewTerm)?.records || [])
+    : records
+
+  if (chartRecords.length === 0) {
     return (
-      <div className="progress-chart progress-chart--empty">
-        <p>No lessons saved yet. Use <strong>Class Tally</strong> to record your first one!</p>
-      </div>
+      <section className="progress-chart">
+        <header className="progress-chart__header">
+          <div>
+            <h2 className="progress-chart__title">Our Progress</h2>
+            <p className="progress-chart__sub">
+              {isArchiveView ? `Archived lessons — ${viewTerm}` : 'Engagement across lessons — higher is better'}
+            </p>
+          </div>
+        </header>
+        <div className="progress-chart--empty">
+          <p>
+            {isArchiveView
+              ? <>No lessons in <strong>{viewTerm}</strong>.</>
+              : <>No lessons saved yet. Use <strong>Save lesson</strong> on the Continuum to record your first one!</>}
+          </p>
+        </div>
+        <TermTools
+          viewTerm={viewTerm}
+          archivedTerms={archivedTerms}
+          archiveTarget={archiveTarget}
+          setArchiveTarget={setArchiveTarget}
+          confirmArchive={confirmArchive}
+          setConfirmArchive={setConfirmArchive}
+          confirmReset={confirmReset}
+          setConfirmReset={setConfirmReset}
+          onViewTermChange={setViewTerm}
+          onArchiveTerm={onArchiveTerm}
+          onResetAll={onResetAll}
+          canArchive={!isArchiveView && records.length > 0}
+        />
+      </section>
     )
   }
 
-  const sorted = [...records].sort((a, b) => a.date.localeCompare(b.date) || a.savedAt.localeCompare(b.savedAt))
+  const sorted = [...chartRecords].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.savedAt.localeCompare(b.savedAt)
+  )
   const innerW = CHART.w - CHART.pad.l - CHART.pad.r
   const innerH = CHART.h - CHART.pad.t - CHART.pad.b
   const barGap = 12
@@ -30,17 +81,24 @@ export default function ProgressChart({ records }) {
     return `${x},${y}`
   }).join(' ')
 
+  const viewLabel =
+    viewTerm === 'current' ? 'Current term' : viewTerm
+
   return (
     <section className="progress-chart">
       <header className="progress-chart__header">
         <div>
           <h2 className="progress-chart__title">Our Progress</h2>
-          <p className="progress-chart__sub">Engagement across lessons — higher is better</p>
+          <p className="progress-chart__sub">
+            {isArchiveView
+              ? `Archived lessons — ${viewTerm}`
+              : 'Engagement across lessons — higher is better'}
+          </p>
         </div>
         <div className="progress-chart__latest">
-          <span className="progress-chart__latest-label">Latest</span>
+          <span className="progress-chart__latest-label">{viewLabel}</span>
           <span className="progress-chart__latest-value">{latest.score}%</span>
-          {delta !== null && (
+          {!isArchiveView && delta !== null && (
             <span className={`progress-chart__delta ${delta >= 0 ? 'progress-chart__delta--up' : 'progress-chart__delta--down'}`}>
               {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% vs last
             </span>
@@ -55,7 +113,6 @@ export default function ProgressChart({ records }) {
           role="img"
           aria-label="Engagement progress chart across saved lessons"
         >
-          {/* grid lines */}
           {[0, 25, 50, 75, 100].map((pct) => {
             const y = CHART.pad.t + innerH - (pct / 100) * innerH
             return (
@@ -74,7 +131,6 @@ export default function ProgressChart({ records }) {
             )
           })}
 
-          {/* stacked bars */}
           {sorted.map((record, i) => {
             const x = startX + i * (barW + barGap)
             const total = getTotalStudents(record.tallies)
@@ -121,7 +177,6 @@ export default function ProgressChart({ records }) {
             )
           })}
 
-          {/* score line */}
           <polyline
             points={linePoints}
             className="progress-chart__line"
@@ -181,7 +236,132 @@ export default function ProgressChart({ records }) {
           ))}
         </ul>
       </div>
+
+      <TermTools
+        viewTerm={viewTerm}
+        archivedTerms={archivedTerms}
+        archiveTarget={archiveTarget}
+        setArchiveTarget={setArchiveTarget}
+        confirmArchive={confirmArchive}
+        setConfirmArchive={setConfirmArchive}
+        confirmReset={confirmReset}
+        setConfirmReset={setConfirmReset}
+        onViewTermChange={setViewTerm}
+        onArchiveTerm={onArchiveTerm}
+        onResetAll={onResetAll}
+        canArchive={!isArchiveView && records.length > 0}
+      />
     </section>
+  )
+}
+
+function TermTools({
+  viewTerm,
+  archivedTerms,
+  archiveTarget,
+  setArchiveTarget,
+  confirmArchive,
+  setConfirmArchive,
+  confirmReset,
+  setConfirmReset,
+  onViewTermChange,
+  onArchiveTerm,
+  onResetAll,
+  canArchive,
+}) {
+  function handleArchive() {
+    onArchiveTerm(archiveTarget)
+    setConfirmArchive(false)
+    onViewTermChange('current')
+  }
+
+  function handleReset() {
+    onResetAll()
+    setConfirmReset(false)
+    onViewTermChange('current')
+  }
+
+  return (
+    <div className="progress-chart__term-tools">
+      <div className="progress-chart__term-row">
+        <label className="progress-chart__term-label">
+          View
+          <select
+            className="progress-chart__term-select"
+            value={viewTerm}
+            onChange={(e) => onViewTermChange(e.target.value)}
+          >
+            <option value="current">Current term</option>
+            {archivedTerms.map(({ label, records }) => (
+              <option key={label} value={label}>
+                {label} ({records.length})
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {canArchive && (
+          <>
+            <label className="progress-chart__term-label">
+              Archive to
+              <select
+                className="progress-chart__term-select"
+                value={archiveTarget}
+                onChange={(e) => setArchiveTarget(e.target.value)}
+              >
+                {TERM_OPTIONS.map((term) => (
+                  <option key={term} value={term}>{term}</option>
+                ))}
+              </select>
+            </label>
+            {!confirmArchive ? (
+              <button
+                type="button"
+                className="btn btn--ghost btn--small"
+                onClick={() => setConfirmArchive(true)}
+              >
+                Archive term
+              </button>
+            ) : (
+              <div className="progress-chart__term-confirm">
+                <span>Move all lessons to {archiveTarget}?</span>
+                <button type="button" className="btn btn--primary btn--small" onClick={handleArchive}>
+                  Yes, archive
+                </button>
+                <button type="button" className="btn btn--ghost btn--small" onClick={() => setConfirmArchive(false)}>
+                  Cancel
+                </button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <div className="progress-chart__term-row progress-chart__term-row--secondary">
+        <button type="button" className="btn btn--ghost btn--small" onClick={downloadExport}>
+          Export data
+        </button>
+        {!confirmReset ? (
+          <button
+            type="button"
+            className="btn btn--ghost btn--small progress-chart__reset-btn"
+            onClick={() => setConfirmReset(true)}
+          >
+            Reset all data
+          </button>
+        ) : (
+          <div className="progress-chart__term-confirm">
+            <span>Delete all lessons, archives &amp; live tally?</span>
+            <button type="button" className="btn btn--ghost btn--small progress-chart__reset-btn" onClick={handleReset}>
+              Yes, delete all
+            </button>
+            <button type="button" className="btn btn--ghost btn--small" onClick={() => setConfirmReset(false)}>
+              Cancel
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 

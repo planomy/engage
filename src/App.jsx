@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { LEVELS } from './data/levels'
 import LevelCard from './components/LevelCard'
 import IconPopup from './components/IconPopup'
@@ -6,11 +6,21 @@ import TeacherTally from './components/TeacherTally'
 import ProgressChart from './components/ProgressChart'
 import LevelUpTips from './components/LevelUpTips'
 import SidebarBarChart from './components/SidebarBarChart'
+import SessionPrompt from './components/SessionPrompt'
 import {
   addLessonRecord,
+  archiveTerm,
   calcEngagementScore,
-  todayISO,
+  clearLiveSession,
+  formatShortDate,
+  getArchivedTermLabels,
+  hasUnsavedTally,
+  loadArchives,
   loadHistory,
+  loadSession,
+  resetAllData,
+  saveSession,
+  todayISO,
 } from './utils/engagement'
 import { pickCelebration, CELEBRATION_MS } from './utils/celebrations'
 import { asset } from './utils/assets'
@@ -31,17 +41,48 @@ const NAV = [
   { id: VIEWS.tips, label: 'Level Up Tips', icon: asset('images/nav-tips.png') },
 ]
 
+function buildArchivedTermsList() {
+  const archives = loadArchives()
+  return getArchivedTermLabels()
+    .map((label) => ({ label, records: archives[label] || [] }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
+
 export default function App() {
+  const initialSession = loadSession()
   const [view, setView] = useState(VIEWS.welcome)
-  const [tally, setTally] = useState({})
-  const [tallyHistory, setTallyHistory] = useState([])
+  const [tally, setTally] = useState(initialSession.tally)
+  const [tallyHistory, setTallyHistory] = useState(initialSession.tallyHistory)
+  const [sessionDate, setSessionDate] = useState(initialSession.date)
   const [popId, setPopId] = useState(null)
   const [celebration, setCelebration] = useState(null)
   const [iconPopup, setIconPopup] = useState(null)
   const [history, setHistory] = useState(loadHistory)
+  const [archivedTerms, setArchivedTerms] = useState(buildArchivedTermsList)
   const [savedFlash, setSavedFlash] = useState(false)
+  const [newDayPrompt, setNewDayPrompt] = useState(() => {
+    const session = loadSession()
+    const today = todayISO()
+    return session.date !== today && hasUnsavedTally(session.tally)
+      ? session.date
+      : null
+  })
 
-  const refreshHistory = useCallback(() => setHistory(loadHistory()), [])
+  const refreshHistory = useCallback(() => {
+    setHistory(loadHistory())
+    setArchivedTerms(buildArchivedTermsList())
+  }, [])
+
+  useEffect(() => {
+    saveSession({ date: sessionDate, tally, tallyHistory })
+  }, [sessionDate, tally, tallyHistory])
+
+  function clearLiveTally() {
+    setTally({})
+    setTallyHistory([])
+    setSessionDate(todayISO())
+    clearLiveSession()
+  }
 
   function handleTallyClick(level) {
     setTally((prev) => ({
@@ -72,8 +113,7 @@ export default function App() {
   }
 
   function handleClearTally() {
-    setTally({})
-    setTallyHistory([])
+    clearLiveTally()
   }
 
   function handleSaveTally() {
@@ -82,12 +122,37 @@ export default function App() {
     addLessonRecord({ label: '', date: todayISO(), tallies: tally })
     refreshHistory()
     setSavedFlash(true)
-    setTimeout(() => setSavedFlash(false), 2500)
+    setTimeout(() => setSavedFlash(false), 8000)
   }
 
-  function handleFullReset() {
-    setTally({})
-    setTallyHistory([])
+  function handleNewLesson() {
+    clearLiveTally()
+    setSavedFlash(false)
+    setView(VIEWS.continuum)
+  }
+
+  function handleHome() {
+    setView(VIEWS.welcome)
+  }
+
+  function handleNewDayClear() {
+    clearLiveTally()
+    setNewDayPrompt(null)
+  }
+
+  function handleNewDayContinue() {
+    setNewDayPrompt(null)
+  }
+
+  function handleArchiveTerm(termLabel) {
+    archiveTerm(termLabel)
+    refreshHistory()
+  }
+
+  function handleResetAll() {
+    resetAllData()
+    clearLiveTally()
+    refreshHistory()
     setView(VIEWS.welcome)
   }
 
@@ -97,7 +162,12 @@ export default function App() {
 
   const totalStudents = Object.values(tally).reduce((a, b) => a + b, 0)
   const score = calcEngagementScore(tally)
-  const todayRecords = history.filter((r) => r.date === todayISO())
+  const today = todayISO()
+  const todayRecords = history.filter((r) => r.date === today)
+  const totalSavedLessons =
+    history.length +
+    archivedTerms.reduce((sum, term) => sum + term.records.length, 0)
+  const carryingOver = sessionDate !== today && totalStudents > 0
 
   return (
     <div className="app">
@@ -127,7 +197,11 @@ export default function App() {
         {(view === VIEWS.continuum || totalStudents > 0) && (
           <div className="sidebar__session">
             {view === VIEWS.continuum && (
-              <p className="sidebar__hint">Ask each student — tap their level</p>
+              <p className="sidebar__hint">
+                {carryingOver
+                  ? `Unsaved tally from ${formatShortDate(sessionDate)} — tap each student`
+                  : 'Ask each student — tap their level'}
+              </p>
             )}
             <div className="sidebar__stats">
               <p className="sidebar__stats-label">Today&apos;s tally</p>
@@ -152,7 +226,7 @@ export default function App() {
                 onClick={handleClearTally}
                 disabled={totalStudents === 0}
               >
-                Clear
+                Clear lesson
               </button>
               <button
                 type="button"
@@ -164,20 +238,29 @@ export default function App() {
               </button>
             </div>
             {savedFlash && (
-              <p className="sidebar__saved">Saved to Progress!</p>
+              <div className="sidebar__saved">
+                <p>Saved to Progress!</p>
+                <button
+                  type="button"
+                  className="sidebar__new-lesson"
+                  onClick={handleNewLesson}
+                >
+                  New lesson →
+                </button>
+              </div>
             )}
           </div>
         )}
 
-        {history.length > 0 && (
+        {totalSavedLessons > 0 && (
           <div className="sidebar__stats sidebar__stats--lessons">
             <p className="sidebar__stats-label">Lessons saved</p>
-            <p className="sidebar__stats-value">{history.length}</p>
+            <p className="sidebar__stats-value">{totalSavedLessons}</p>
           </div>
         )}
 
-        <button type="button" className="sidebar__reset" onClick={handleFullReset}>
-          Start over
+        <button type="button" className="sidebar__reset" onClick={handleHome}>
+          Home
         </button>
 
         <footer className="sidebar__footer">Created by Mr C 2026</footer>
@@ -236,7 +319,12 @@ export default function App() {
         )}
 
         {view === VIEWS.progress && (
-          <ProgressChart records={history} />
+          <ProgressChart
+            records={history}
+            archivedTerms={archivedTerms}
+            onArchiveTerm={handleArchiveTerm}
+            onResetAll={handleResetAll}
+          />
         )}
 
         {view === VIEWS.tips && (
@@ -246,6 +334,14 @@ export default function App() {
 
       {iconPopup && (
         <IconPopup iconKey={iconPopup} onClose={() => setIconPopup(null)} />
+      )}
+
+      {newDayPrompt && (
+        <SessionPrompt
+          date={newDayPrompt}
+          onClear={handleNewDayClear}
+          onContinue={handleNewDayContinue}
+        />
       )}
     </div>
   )
