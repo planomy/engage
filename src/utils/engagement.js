@@ -10,6 +10,23 @@ const LEVEL_SCORES = Object.fromEntries(
   LEVELS.map((level, index) => [level.id, index])
 )
 
+function normalizeTallyHistoryItem(item) {
+  if (typeof item === 'string') return { levelId: item }
+  if (item && typeof item.levelId === 'string') return item
+  return null
+}
+
+export function normalizeStudentRatings(raw) {
+  if (!raw || typeof raw !== 'object') return {}
+  const next = {}
+  for (const [key, levelId] of Object.entries(raw)) {
+    if (typeof levelId === 'string' && LEVEL_SCORES[levelId] !== undefined) {
+      next[key] = levelId
+    }
+  }
+  return next
+}
+
 export function getLevelScore(levelId) {
   return LEVEL_SCORES[levelId] ?? 0
 }
@@ -72,31 +89,81 @@ export function loadSession() {
   try {
     const raw = localStorage.getItem(SESSION_KEY)
     if (!raw) {
-      return { date: todayISO(), tally: {}, tallyHistory: [] }
+      return {
+        date: todayISO(),
+        tally: {},
+        tallyHistory: [],
+        studentRatings: {},
+        selectedStudent: null,
+      }
     }
     const parsed = JSON.parse(raw)
     return {
       date: parsed.date || todayISO(),
       tally: parsed.tally || {},
-      tallyHistory: Array.isArray(parsed.tallyHistory) ? parsed.tallyHistory : [],
+      tallyHistory: Array.isArray(parsed.tallyHistory)
+        ? parsed.tallyHistory.map(normalizeTallyHistoryItem).filter(Boolean)
+        : [],
+      studentRatings: normalizeStudentRatings(parsed.studentRatings),
+      selectedStudent:
+        typeof parsed.selectedStudent === 'number' ? parsed.selectedStudent : null,
     }
   } catch {
-    return { date: todayISO(), tally: {}, tallyHistory: [] }
+    return {
+      date: todayISO(),
+      tally: {},
+      tallyHistory: [],
+      studentRatings: {},
+      selectedStudent: null,
+    }
   }
 }
 
-export function saveSession({ date, tally, tallyHistory }) {
+export function saveSession({ date, tally, tallyHistory, studentRatings, selectedStudent }) {
   localStorage.setItem(
     SESSION_KEY,
-    JSON.stringify({ date, tally, tallyHistory })
+    JSON.stringify({
+      date,
+      tally,
+      tallyHistory,
+      studentRatings: normalizeStudentRatings(studentRatings),
+      selectedStudent: typeof selectedStudent === 'number' ? selectedStudent : null,
+    })
   )
 }
 
 export function clearLiveSession() {
-  saveSession({ date: todayISO(), tally: {}, tallyHistory: [] })
+  saveSession({
+    date: todayISO(),
+    tally: {},
+    tallyHistory: [],
+    studentRatings: {},
+    selectedStudent: null,
+  })
 }
 
-export function addLessonRecord({ label, date, tallies }) {
+export function buildStudentRatingEntries(studentRatings, roster = []) {
+  return Object.entries(normalizeStudentRatings(studentRatings))
+    .map(([index, levelId]) => {
+      const slot = Number(index)
+      const name = (roster[slot] || '').trim() || `Student ${slot + 1}`
+      return {
+        index: slot,
+        name,
+        levelId,
+        score: calcEngagementScore({ [levelId]: 1 }),
+      }
+    })
+    .sort((a, b) => a.index - b.index)
+}
+
+export function getStudentScoreFromRecord(record, studentIndex) {
+  const entries = record.studentRatings || []
+  const match = entries.find((entry) => entry.index === studentIndex)
+  return match?.score ?? null
+}
+
+export function addLessonRecord({ label, date, tallies, studentRatings = [] }) {
   const records = loadHistory()
   const record = {
     id: typeof crypto !== 'undefined' && crypto.randomUUID
@@ -105,6 +172,7 @@ export function addLessonRecord({ label, date, tallies }) {
     label: label.trim() || formatDefaultLabel(date),
     date,
     tallies: { ...emptyTallies(), ...tallies },
+    studentRatings: Array.isArray(studentRatings) ? studentRatings : [],
     score: calcEngagementScore(tallies),
     savedAt: new Date().toISOString(),
   }
@@ -164,6 +232,7 @@ export function exportAllData() {
     activeLessons: loadHistory(),
     archivedTerms: loadArchives(),
     liveSession: loadSession(),
+    studentRoster: JSON.parse(localStorage.getItem('engage-student-roster') || '[]'),
   }
 }
 

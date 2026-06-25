@@ -394,20 +394,135 @@
 .continuum {
   width: 100%;
   max-width: min(1680px, 100%);
+  height: 100%;
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
   animation: fadeUp 0.4s ease-out;
 }
 
+.continuum__students {
+  flex: 0 0 auto;
+  min-height: 0;
+  padding: 0 0.15rem;
+}
+
 .continuum__grid {
+  flex: 1 1 auto;
+  min-height: 0;
   display: grid;
   grid-template-columns: repeat(6, 1fr);
   gap: 0.75rem;
   width: 100%;
   align-items: start;
+  align-content: center;
 }
 
 .continuum .level-card {
   min-height: auto;
   height: auto;
+}
+
+/* Student name pills */
+.student-pills {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 0.28rem 0.35rem;
+  width: 100%;
+}
+
+.student-pills--compact {
+  grid-template-columns: repeat(auto-fill, minmax(5.5rem, 1fr));
+  gap: 0.3rem;
+}
+
+.student-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  max-width: 100%;
+  padding: 0.18rem 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.34);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.student-pill--class {
+  grid-column: span 2;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.student-pill--empty {
+  color: rgba(255, 255, 255, 0.18);
+  border-style: dashed;
+  border-color: rgba(255, 255, 255, 0.04);
+}
+
+.student-pill--named:hover,
+.student-pill--class:hover {
+  color: rgba(255, 255, 255, 0.62);
+  border-color: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.student-pill--selected {
+  color: rgba(255, 255, 255, 0.88);
+  border-color: rgba(167, 139, 250, 0.35);
+  background: rgba(124, 58, 237, 0.1);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.08);
+}
+
+.student-pill--rated {
+  box-shadow: inset 0 -2px 0 var(--rated-accent, rgba(167, 139, 250, 0.45));
+}
+
+.student-pill__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.student-pill--editing {
+  padding: 0;
+  border-color: rgba(167, 139, 250, 0.28);
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.student-pill__input {
+  width: 100%;
+  min-width: 0;
+  padding: 0.18rem 0.45rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 600;
+  outline: none;
+}
+
+.progress-chart__student-filter {
+  margin-bottom: 1rem;
+}
+
+.progress-chart__student-filter .student-pill {
+  font-size: 0.72rem;
+  padding: 0.28rem 0.65rem;
+}
+
+.progress-chart__student-filter .student-pill--class {
+  grid-column: auto;
 }
 
 /* Level cards — base styles */
@@ -945,6 +1060,10 @@
   .continuum__grid {
     grid-template-columns: repeat(3, 1fr);
   }
+
+  .student-pills:not(.student-pills--compact) {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 768px) {
@@ -991,6 +1110,10 @@
 
   .continuum__grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .student-pills:not(.student-pills--compact) {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 
   .confirm-panel__hero {

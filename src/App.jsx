@@ -7,9 +7,11 @@ import ProgressChart from './components/ProgressChart'
 import LevelUpTips from './components/LevelUpTips'
 import SidebarBarChart from './components/SidebarBarChart'
 import SessionPrompt from './components/SessionPrompt'
+import StudentPills from './components/StudentPills'
 import {
   addLessonRecord,
   archiveTerm,
+  buildStudentRatingEntries,
   calcEngagementScore,
   clearLiveSession,
   getArchivedTermLabels,
@@ -21,6 +23,7 @@ import {
   saveSession,
   todayISO,
 } from './utils/engagement'
+import { loadRoster, saveRoster } from './utils/students'
 import { pickCelebration, CELEBRATION_MS } from './utils/celebrations'
 import { asset } from './utils/assets'
 import './App.css'
@@ -52,6 +55,9 @@ export default function App() {
   const [view, setView] = useState(VIEWS.welcome)
   const [tally, setTally] = useState(initialSession.tally)
   const [tallyHistory, setTallyHistory] = useState(initialSession.tallyHistory)
+  const [studentRatings, setStudentRatings] = useState(initialSession.studentRatings)
+  const [selectedStudent, setSelectedStudent] = useState(initialSession.selectedStudent)
+  const [roster, setRoster] = useState(loadRoster)
   const [sessionDate, setSessionDate] = useState(initialSession.date)
   const [popId, setPopId] = useState(null)
   const [celebration, setCelebration] = useState(null)
@@ -73,23 +79,38 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    saveSession({ date: sessionDate, tally, tallyHistory })
-  }, [sessionDate, tally, tallyHistory])
+    saveSession({
+      date: sessionDate,
+      tally,
+      tallyHistory,
+      studentRatings,
+      selectedStudent,
+    })
+  }, [sessionDate, tally, tallyHistory, studentRatings, selectedStudent])
 
   function clearLiveTally() {
     setTally({})
     setTallyHistory([])
+    setStudentRatings({})
+    setSelectedStudent(null)
     setSessionDate(todayISO())
     clearLiveSession()
   }
 
-  function handleTallyClick(level) {
-    setTally((prev) => ({
-      ...prev,
-      [level.id]: (prev[level.id] || 0) + 1,
-    }))
-    setTallyHistory((prev) => [...prev, level.id])
+  function handleStudentRename(index, name) {
+    setRoster((prev) => {
+      const next = [...prev]
+      next[index] = name
+      saveRoster(next)
+      return next
+    })
+  }
 
+  function handleStudentSelect(index) {
+    setSelectedStudent((prev) => (prev === index ? null : index))
+  }
+
+  function triggerLevelFeedback(level) {
     if (level.zone === 'engagement') {
       setCelebration({ levelId: level.id, anim: pickCelebration() })
       setTimeout(() => setCelebration(null), CELEBRATION_MS)
@@ -99,14 +120,56 @@ export default function App() {
     }
   }
 
+  function handleTallyClick(level) {
+    const levelId = level.id
+
+    if (selectedStudent !== null) {
+      const prevLevelId = studentRatings[selectedStudent] || null
+      setTally((prev) => {
+        const next = { ...prev }
+        if (prevLevelId) {
+          next[prevLevelId] = Math.max(0, (next[prevLevelId] || 0) - 1)
+        }
+        next[levelId] = (next[levelId] || 0) + 1
+        return next
+      })
+      setStudentRatings((prev) => ({ ...prev, [selectedStudent]: levelId }))
+      setTallyHistory((prev) => [
+        ...prev,
+        { levelId, studentIndex: selectedStudent, prevLevelId },
+      ])
+      triggerLevelFeedback(level)
+      return
+    }
+
+    setTally((prev) => ({
+      ...prev,
+      [levelId]: (prev[levelId] || 0) + 1,
+    }))
+    setTallyHistory((prev) => [...prev, { levelId }])
+    triggerLevelFeedback(level)
+  }
+
   function handleUndo() {
     setTallyHistory((prev) => {
       if (prev.length === 0) return prev
       const last = prev[prev.length - 1]
-      setTally((t) => ({
-        ...t,
-        [last]: Math.max(0, (t[last] || 0) - 1),
-      }))
+      setTally((t) => {
+        const next = { ...t }
+        next[last.levelId] = Math.max(0, (t[last.levelId] || 0) - 1)
+        if (typeof last.studentIndex === 'number' && last.prevLevelId) {
+          next[last.prevLevelId] = (next[last.prevLevelId] || 0) + 1
+        }
+        return next
+      })
+      if (typeof last.studentIndex === 'number') {
+        setStudentRatings((ratings) => {
+          const next = { ...ratings }
+          if (last.prevLevelId) next[last.studentIndex] = last.prevLevelId
+          else delete next[last.studentIndex]
+          return next
+        })
+      }
       return prev.slice(0, -1)
     })
   }
@@ -118,7 +181,12 @@ export default function App() {
   function handleSaveTally() {
     const total = Object.values(tally).reduce((a, b) => a + b, 0)
     if (total === 0) return
-    addLessonRecord({ label: '', date: todayISO(), tallies: tally })
+    addLessonRecord({
+      label: '',
+      date: todayISO(),
+      tallies: tally,
+      studentRatings: buildStudentRatingEntries(studentRatings, roster),
+    })
     refreshHistory()
     setSavedFlash(true)
     setTimeout(() => setSavedFlash(false), 8000)
@@ -279,6 +347,15 @@ export default function App() {
 
         {view === VIEWS.continuum && (
           <section className="continuum">
+            <div className="continuum__students">
+              <StudentPills
+                roster={roster}
+                selectedIndex={selectedStudent}
+                studentRatings={studentRatings}
+                onSelect={handleStudentSelect}
+                onRename={handleStudentRename}
+              />
+            </div>
             <div className="continuum__grid">
               {LEVELS.map((level) => (
                 <LevelCard
@@ -309,6 +386,7 @@ export default function App() {
           <ProgressChart
             records={history}
             archivedTerms={archivedTerms}
+            roster={roster}
             onArchiveTerm={handleArchiveTerm}
             onResetAll={handleResetAll}
           />

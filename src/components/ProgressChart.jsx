@@ -1,21 +1,26 @@
 import { useState } from 'react'
 import { LEVELS } from '../data/levels'
+import StudentPills from './StudentPills'
 import {
   TERM_OPTIONS,
   formatShortDate,
+  getStudentScoreFromRecord,
   getTotalStudents,
   downloadExport,
 } from '../utils/engagement'
+import { getStudentLabel } from '../utils/students'
 
 const CHART = { w: 720, h: 280, pad: { t: 24, r: 24, b: 48, l: 44 } }
 
 export default function ProgressChart({
   records,
   archivedTerms = [],
+  roster = [],
   onArchiveTerm,
   onResetAll,
 }) {
   const [viewTerm, setViewTerm] = useState('current')
+  const [viewStudent, setViewStudent] = useState('class')
   const [archiveTarget, setArchiveTarget] = useState(TERM_OPTIONS[0])
   const [confirmArchive, setConfirmArchive] = useState(false)
   const [confirmReset, setConfirmReset] = useState(false)
@@ -25,7 +30,29 @@ export default function ProgressChart({
     ? (archivedTerms.find((t) => t.label === viewTerm)?.records || [])
     : records
 
-  if (chartRecords.length === 0) {
+  const isClassView = viewStudent === 'class'
+  const studentIndex = isClassView ? null : viewStudent
+
+  function getRecordScore(record) {
+    if (isClassView) return record.score
+    const score = getStudentScoreFromRecord(record, studentIndex)
+    return score ?? null
+  }
+
+  function getStudentLevelId(record) {
+    if (isClassView) return null
+    return (record.studentRatings || []).find((entry) => entry.index === studentIndex)?.levelId || null
+  }
+
+  const scoredRecords = chartRecords
+    .map((record) => ({ record, score: getRecordScore(record) }))
+    .filter((item) => item.score !== null)
+
+  const studentLabel = isClassView
+    ? 'Whole class'
+    : getStudentLabel(roster, studentIndex)
+
+  if (scoredRecords.length === 0) {
     return (
       <section className="progress-chart">
         <header className="progress-chart__header">
@@ -36,11 +63,26 @@ export default function ProgressChart({
             </p>
           </div>
         </header>
+        <div className="progress-chart__student-filter">
+          <StudentPills
+            roster={roster}
+            showEmpty={false}
+            classOption
+            classSelected={isClassView}
+            selectedIndex={isClassView ? null : studentIndex}
+            compact
+            editable={false}
+            onSelectClass={() => setViewStudent('class')}
+            onSelect={setViewStudent}
+          />
+        </div>
         <div className="progress-chart--empty">
           <p>
             {isArchiveView
-              ? <>No lessons in <strong>{viewTerm}</strong>.</>
-              : <>No lessons saved yet. Use <strong>Save lesson</strong> on the Continuum to record your first one!</>}
+              ? <>No lessons in <strong>{viewTerm}</strong>{!isClassView && <> for <strong>{studentLabel}</strong></>}.</>
+              : isClassView
+                ? <>No lessons saved yet. Use <strong>Save lesson</strong> on the Continuum to record your first one!</>
+                : <>No saved ratings for <strong>{studentLabel}</strong> yet. Select them on the Continuum, rate a level, then save the lesson.</>}
           </p>
         </div>
         <TermTools
@@ -61,9 +103,9 @@ export default function ProgressChart({
     )
   }
 
-  const sorted = [...chartRecords].sort(
-    (a, b) => a.date.localeCompare(b.date) || a.savedAt.localeCompare(b.savedAt)
-  )
+  const sorted = scoredRecords
+    .map((item) => ({ ...item.record, chartScore: item.score }))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.savedAt.localeCompare(b.savedAt))
   const innerW = CHART.w - CHART.pad.l - CHART.pad.r
   const innerH = CHART.h - CHART.pad.t - CHART.pad.b
   const barGap = 12
@@ -73,11 +115,11 @@ export default function ProgressChart({
 
   const latest = sorted[sorted.length - 1]
   const previous = sorted.length > 1 ? sorted[sorted.length - 2] : null
-  const delta = previous ? latest.score - previous.score : null
+  const delta = previous ? latest.chartScore - previous.chartScore : null
 
   const linePoints = sorted.map((r, i) => {
     const x = startX + i * (barW + barGap) + barW / 2
-    const y = CHART.pad.t + innerH - (r.score / 100) * innerH
+    const y = CHART.pad.t + innerH - (r.chartScore / 100) * innerH
     return `${x},${y}`
   }).join(' ')
 
@@ -92,12 +134,14 @@ export default function ProgressChart({
           <p className="progress-chart__sub">
             {isArchiveView
               ? `Archived lessons — ${viewTerm}`
-              : 'Engagement across lessons — higher is better'}
+              : isClassView
+                ? 'Engagement across lessons — higher is better'
+                : `${studentLabel} — engagement across lessons`}
           </p>
         </div>
         <div className="progress-chart__latest">
-          <span className="progress-chart__latest-label">{viewLabel}</span>
-          <span className="progress-chart__latest-value">{latest.score}%</span>
+          <span className="progress-chart__latest-label">{isClassView ? viewLabel : studentLabel}</span>
+          <span className="progress-chart__latest-value">{latest.chartScore}%</span>
           {!isArchiveView && delta !== null && (
             <span className={`progress-chart__delta ${delta >= 0 ? 'progress-chart__delta--up' : 'progress-chart__delta--down'}`}>
               {delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}% vs last
@@ -105,6 +149,20 @@ export default function ProgressChart({
           )}
         </div>
       </header>
+
+      <div className="progress-chart__student-filter">
+        <StudentPills
+          roster={roster}
+          showEmpty={false}
+          classOption
+          classSelected={isClassView}
+          selectedIndex={isClassView ? null : studentIndex}
+          compact
+          editable={false}
+          onSelectClass={() => setViewStudent('class')}
+          onSelect={setViewStudent}
+        />
+      </div>
 
       <div className="progress-chart__wrap">
         <svg
@@ -135,24 +193,43 @@ export default function ProgressChart({
             const x = startX + i * (barW + barGap)
             const total = getTotalStudents(record.tallies)
             let yOffset = CHART.pad.t + innerH
+            const studentLevelId = getStudentLevelId(record)
 
-            const segments = LEVELS.map((level) => {
-              const count = record.tallies[level.id] || 0
-              if (count === 0 || total === 0) return null
-              const segH = (count / total) * innerH
-              yOffset -= segH
-              return (
-                <rect
-                  key={level.id}
-                  x={x}
-                  y={yOffset}
-                  width={barW}
-                  height={segH}
-                  fill={level.accent}
-                  rx={2}
-                />
-              )
-            })
+            const segments = isClassView
+              ? LEVELS.map((level) => {
+                  const count = record.tallies[level.id] || 0
+                  if (count === 0 || total === 0) return null
+                  const segH = (count / total) * innerH
+                  yOffset -= segH
+                  return (
+                    <rect
+                      key={level.id}
+                      x={x}
+                      y={yOffset}
+                      width={barW}
+                      height={segH}
+                      fill={level.accent}
+                      rx={2}
+                    />
+                  )
+                })
+              : (() => {
+                  const level = LEVELS.find((item) => item.id === studentLevelId)
+                  if (!level) return null
+                  const segH = (record.chartScore / 100) * innerH
+                  yOffset -= segH
+                  return (
+                    <rect
+                      key={level.id}
+                      x={x}
+                      y={yOffset}
+                      width={barW}
+                      height={segH}
+                      fill={level.accent}
+                      rx={2}
+                    />
+                  )
+                })()
 
             return (
               <g key={record.id}>
@@ -184,13 +261,13 @@ export default function ProgressChart({
           />
           {sorted.map((record, i) => {
             const x = startX + i * (barW + barGap) + barW / 2
-            const y = CHART.pad.t + innerH - (record.score / 100) * innerH
+            const y = CHART.pad.t + innerH - (record.chartScore / 100) * innerH
             return (
               <g key={`dot-${record.id}`}>
                 <circle cx={x} cy={y} r={6} className="progress-chart__dot-glow" />
                 <circle cx={x} cy={y} r={4} className="progress-chart__dot" />
                 <text x={x} y={y - 12} className="progress-chart__score-label" textAnchor="middle">
-                  {record.score}%
+                  {record.chartScore}%
                 </text>
               </g>
             )
@@ -219,19 +296,31 @@ export default function ProgressChart({
               <span className="progress-chart__history-date">{formatShortDate(r.date)}</span>
               <span className="progress-chart__history-label">{r.label}</span>
               <span className="progress-chart__history-bar">
-                {LEVELS.map((l) => {
-                  const n = r.tallies[l.id] || 0
-                  if (!n) return null
-                  return (
-                    <span
-                      key={l.id}
-                      style={{ flex: n, background: l.accent }}
-                      title={`${l.name}: ${n}`}
-                    />
-                  )
-                })}
+                {isClassView
+                  ? LEVELS.map((l) => {
+                      const n = r.tallies[l.id] || 0
+                      if (!n) return null
+                      return (
+                        <span
+                          key={l.id}
+                          style={{ flex: n, background: l.accent }}
+                          title={`${l.name}: ${n}`}
+                        />
+                      )
+                    })
+                  : (() => {
+                      const levelId = getStudentLevelId(r)
+                      const level = LEVELS.find((item) => item.id === levelId)
+                      if (!level) return null
+                      return (
+                        <span
+                          style={{ flex: 1, background: level.accent }}
+                          title={level.name}
+                        />
+                      )
+                    })()}
               </span>
-              <span className="progress-chart__history-score">{r.score}%</span>
+              <span className="progress-chart__history-score">{r.chartScore}%</span>
             </li>
           ))}
         </ul>
